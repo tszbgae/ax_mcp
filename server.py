@@ -2,13 +2,22 @@
 from mcp.server.fastmcp import FastMCP
 from ax_manager import AxStateManager
 import benchmarks
+from benchmarks import (ackley,rosenbrock,rastrigin,sphere,beale)
+
+BENCHMARK_REGISTRY = {
+    "ackley": ackley,
+    "rosenbrock": rosenbrock,
+    "rastrigin": rastrigin,
+    "sphere": sphere,
+    "beale": beale
+}
 
 # Initialize Server
 mcp = FastMCP("AxOptimizationAgent")
 manager = AxStateManager()
 
 @mcp.tool()
-def create_study(study_name: str, objective_name: str, maximize: bool = True) -> str:
+def create_study(study_name: str, objective_name: str, parameters:dict[str, list[float]], maximize: bool = True) -> str:
     """
     Initialize a new Ax optimization study.
     Args:
@@ -19,50 +28,58 @@ def create_study(study_name: str, objective_name: str, maximize: bool = True) ->
     try:
         # We create with a dummy parameter because Ax requires at least one.
         # The LLM will overwrite/add real ones next.
-        return manager.create_experiment(study_name, maximize)
+        return manager.create_experiment(study_name, objective_name,parameters,maximize)
     except Exception as e:
         return f"Error: {str(e)}"
 
-@mcp.tool()
-def add_parameter(study_name: str, param_name: str, param_type: str, bounds: list[float], value_type: str = "float") -> str:
-    """Add a search parameter to the study."""
-    try:
-        client = manager.load_client(study_name)
+# @mcp.tool()
+# def add_parameter(study_name: str, param_name: str, param_type: str, bounds: list[float], value_type: str = "float") -> str:
+#     """Add a search parameter to the study."""
+#     try:
+#         client = manager.load_client(study_name)
         
-        # Use our new helper method in the manager
-        manager.add_parameter_to_client(client, param_name, bounds, param_type)
+#         # Use our new helper method in the manager
+#         manager.add_parameter_to_client(client, param_name, bounds, param_type)
         
-        manager.save_client(study_name, client)
-        return f"Parameter {param_name} added to {study_name}"
-    except Exception as e:
-        return f"Error adding parameter: {str(e)}"
+#         manager.save_client(study_name, client)
+#         return f"Parameter {param_name} added to {study_name}"
+#     except Exception as e:
+#         return f"Error adding parameter: {str(e)}"
 
 @mcp.tool()
-def get_next_trial(study_name: str) -> str:
+def get_next_trial(study_name: str,objective_name:str,number_loops:int) -> str:
     """
     Generates the next set of parameters to test.
+    Completes a loop of number_loops times.
+    Then completes the trial.
     Returns a JSON string with the parameter values and the trial_index.
     """
     client = manager.load_client(study_name)
     try:
-        param_dict, trial_index = client.get_next_trial()
+        trials = client.get_next_trials(max_trials=number_loops)
+        for trial_index, parameters in trials.items():
+            x = parameters["x"]
+            y = parameters["y"]
+            result = BENCHMARK_REGISTRY[objective_name]({"x":x,"y":y})
+            raw_data = {objective_name: result}
+            client.complete_trial(trial_index=trial_index, raw_data=raw_data)
         manager.save_client(study_name, client) # Save state (trial is now 'running')
-        return str({"trial_index": trial_index, "parameters": param_dict})
+        return 'success'
     except Exception as e:
         return f"Error generating trial: {str(e)}"
 
-@mcp.tool()
-def complete_trial(study_name: str, trial_index: int, metric_value: float) -> str:
-    """
-    Report the results of a trial back to Ax.
-    """
-    client = manager.load_client(study_name)
-    try:
-        client.complete_trial(trial_index=trial_index, raw_data=metric_value)
-        manager.save_client(study_name, client)
-        return f"Trial {trial_index} completed with value {metric_value}."
-    except Exception as e:
-        return f"Error completing trial: {str(e)}"
+# @mcp.tool()
+# def complete_trial(study_name: str, trial_index: int, metric_value: float) -> str:
+#     """
+#     Report the results of a trial back to Ax.
+#     """
+#     client = manager.load_client(study_name)
+#     try:
+#         client.complete_trial(trial_index=trial_index, raw_data=metric_value)
+#         manager.save_client(study_name, client)
+#         return f"Trial {trial_index} completed with value {metric_value}."
+#     except Exception as e:
+#         return f"Error completing trial: {str(e)}"
 
 @mcp.tool()
 def list_available_functions() -> str:

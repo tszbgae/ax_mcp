@@ -1,0 +1,3 @@
+i would like to create a new project.  the study name is teststudy8.  the objective is the ackley benchmark function (objective name: ackley).  the parameters are x with bounds [-3,3] and y with bounds [-5,5]. minimize the objective
+
+get next trial, with number of loops at 10

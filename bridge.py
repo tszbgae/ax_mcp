@@ -94,7 +94,7 @@ class AxOllamaBridge:
                     "name": fn_name,
                 }
                 self.history.append(tool_msg)
-                print(f"   < Result: {str(result.content)[:100]}...") # Truncate log
+                print(f"   < Result: {str(result.content)}...") # Truncate log
                 
             except Exception as e:
                 error_msg = f"Error executing {fn_name}: {str(e)}"
